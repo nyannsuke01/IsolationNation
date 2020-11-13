@@ -32,6 +32,8 @@
 
 import UIKit
 import Combine
+import Amplify
+
 
 enum AuthenticationState {
   case startingSignUp
@@ -52,30 +54,132 @@ public final class AuthenticationService {
 
   // MARK: Public API
 
-  func signIn(as username: String, identifiedBy password: String) -> Future<AuthenticationState, Error> {
-    return Future { promise in
-      promise(.failure(IsolationNationError.notImplemented))
+    func signIn(as username: String, identifiedBy password: String) -> Future<AuthenticationState, Error> {
+        return Future { promise in
+            // 1ユーザー名とパスワードを渡して、AmplifyサインインAPIを呼び出します。
+            _ = Amplify.Auth
+                .signIn(username: username, password: password) { [self] result in
+                    switch result {
+                    // 2 障害をチェックして処理します。
+                    case .failure(let error):
+                        logger.logError(error.localizedDescription)
+                        promise(.failure(error))
+                    // 3 成功したら、現在ログインしているユーザーを取得します。
+                    case .success:
+                        guard let authUser = Amplify.Auth.getCurrentUser() else {
+                            let authError = IsolationNationError.unexpctedAuthResponse
+                            logger.logError(authError)
+                            signOut()
+                            promise(.failure(authError))
+                            return
+                        }
+                        // 4 以前と同様に、ユーザーセッションでユーザーの詳細を設定します。
+                        setUserSessionData(authUser.username)
+                    }
+                }
+        }
     }
-  }
 
   func signUp(as username: String, identifiedBy password: String, with email: String) -> Future<AuthenticationState, Error> {
     return Future { promise in
-      promise(.failure(IsolationNationError.notImplemented))
+      // 1 電子メールによるサインアップを期待するようにサインアップ要求を構成します。
+      let userAttributes = [AuthUserAttribute(.email, value: email)]
+      let options = AuthSignUpRequest.Options(userAttributes: userAttributes)
+      // 2 Amplifyを使用してサインアップを実行します。前の例で行ったように結果を処理します。
+      _ = Amplify.Auth.signUp(
+        username: username,
+        password: password,
+        options: options
+      ) { [self] result in
+        DispatchQueue.main.async {
+          switch result {
+          case .failure(let error):
+            logger.logError(error.localizedDescription)
+            promise(.failure(error))
+          case .success(let amplifyResult):
+            //3サインアップが成功した場合は、awaitingConfirmation状態を返します。Amplifyは、提供されたアドレスの所有権を確認するために、ユーザーに電子メールでコードを送信します。
+            if case .confirmUser = amplifyResult.nextStep {
+              promise(.success(.awaitingConfirmation(username, password)))
+            } else {
+              let error = IsolationNationError.unexpctedAuthResponse
+              logger.logError(error.localizedDescription)
+              promise(.failure(error))
+            }
+          }
+        }
+      }
     }
   }
 
   func confirmSignUp(for username: String, with password: String, confirmedBy confirmationCode: String) -> Future<AuthenticationState, Error> {
     return Future { promise in
-      promise(.failure(IsolationNationError.notImplemented))
+      // 1 Amplifyでサインアップを確認し、通常の方法で応答を処理します。
+      _ = Amplify.Auth.confirmSignUp(
+        for: username,
+        confirmationCode: confirmationCode
+      ) { [self] result in
+        switch result {
+        case .failure(let error):
+          logger.logError(error.localizedDescription)
+          promise(.failure(error))
+        case .success:
+          // 2 成功したら、ユーザーをサインインします。
+          _ = Amplify.Auth.signIn(
+            username: username,
+            password: password
+          ) { result in
+            switch result {
+            case .failure(let error):
+              logger.logError(error.localizedDescription)
+              promise(.failure(error))
+            case .success:
+              // 3 checkAuthSession()を呼び出します。これにより、ユーザーセッションが設定されます。
+              checkAuthSession()
+            }
+          }
+        }
+      }
     }
   }
 
   func signOut() {
-    setUserSessionData(nil)
+    _ = Amplify.Auth.signOut { [self] result in
+      switch result {
+      case .failure(let error):
+        logger.logError(error)
+      default:
+        break
+      }
+    }
   }
 
   func checkAuthSession() {
     // To implement
+    // 1Amplifyに現在の認証セッションを要求します。
+    _ = Amplify.Auth.fetchAuthSession { [self] result in
+      switch result {
+      // 2エラーがある場合は、ユーザーをサインアウトします。
+      case .failure(let error):
+        logger.logError(error)
+        signOut()
+
+      // 3成功したら、ユーザーがサインインしていることを確認します。
+      case .success(let session):
+        if !session.isSignedIn {
+          setUserSessionData(nil)
+          return
+        }
+
+        // 4ユーザーがサインインしている場合は、現在のユーザーを取得し、ユーザーセッションの詳細を設定します。
+        guard let authUser = Amplify.Auth.getCurrentUser() else {
+          let authError = IsolationNationError.unexpctedAuthResponse
+          logger.logError(authError)
+          signOut()
+          return
+        }
+        setUserSessionData(authUser.username)
+      }
+    }
   }
 
   // MARK: Private

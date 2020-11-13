@@ -9,5 +9,6 @@ target 'IsolationNation' do
 pod 'Amplify'
 pod 'Amplify/Tools'
 pod 'AmplifyPlugins/AWSCognitoAuthPlugin'
+pod 'AmplifyPlugins/AWSAPIPlugin'
 
 end

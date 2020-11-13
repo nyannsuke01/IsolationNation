@@ -42,8 +42,20 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
   func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
     // Setup user
-    userSession.loggedInUser = "Lizzie"
     let authenticationService = AuthenticationService(userSession: userSession)
+    do {
+        try Amplify.add(plugin: AWSCognitoAuthPlugin())
+        try Amplify.configure()
+
+        #if DEBUG
+        Amplify.Logging.logLevel = .debug
+        #else
+        Amplify.Logging.logLevel = .error
+        #endif
+    } catch {
+        print("Error initializing Amplify. \(error)")
+    }
+
 
     // Handle Authentication
     authenticationService.checkAuthSession()
@@ -55,6 +67,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     UITableViewCell.appearance().backgroundColor = .backgroundColor
     UITableViewCell.appearance().selectionStyle = .none
 
+    // Listen to auth changes
+    _ = Amplify.Hub.listen(to: .auth) { payload in
+      switch payload.eventName {
+      case HubPayload.EventName.Auth.sessionExpired:
+        authenticationService.checkAuthSession()
+      default:
+        break
+      }
+    }
     return true
   }
 

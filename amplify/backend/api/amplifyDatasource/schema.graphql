@@ -1,10 +1,14 @@
-type Task @model {
+# 1 User型を宣言します。
+type User
+  # 4 ディレクティブでuserタイプに注釈を付け@modelます
+  @model
+{
+  # 2 ユーザータイプのさまざまなフィールドをcode: Typeタプルとして定義します。たとえば、idフィールドのタイプはID、であり、postcodeフィールドのタイプはStringです。!オペレータはタイプが必要とされていることを意味します。
+
   id: ID!
-  title: String!
-  description: String
-  status: String
-}
-type Note @model {
-  id: ID!
-  content: String!
+  username: String!
+  # 3 The sub field will contain the sub record from Cognito. This is the unique identifier for the user.
+  sub: String!
+  postcode: String
+  createdAt: AWSDateTime!
 }
