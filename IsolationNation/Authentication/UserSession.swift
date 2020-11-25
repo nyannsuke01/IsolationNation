@@ -35,7 +35,7 @@ import SwiftUI
 
 public final class UserSession: ObservableObject {
   @Published var loaded = false
-  @Published var loggedInUser: String? {
+  @Published var loggedInUser: User? {
     didSet {
       loaded = true
     }
@@ -43,7 +43,7 @@ public final class UserSession: ObservableObject {
 
   init() {}
 
-  init(loggedInUser: String?) {
+  init(loggedInUser: User?) {
     self.loggedInUser = loggedInUser
   }
 }

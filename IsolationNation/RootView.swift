@@ -59,7 +59,10 @@ struct RootView: View {
         .edgesIgnoringSafeArea(.all)
       VStack {
         HomeScreen(
-          model: HomeScreenViewModel(userID: loggedInUser, username: loggedInUser)
+            model: HomeScreenViewModel(
+              userID: loggedInUser.sub,
+              username: loggedInUser.username)
+
         )
           .environmentObject(userSession)
           .environmentObject(viewModelFactory)
